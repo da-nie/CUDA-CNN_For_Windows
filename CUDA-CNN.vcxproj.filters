@@ -125,6 +125,9 @@
     <ClInclude Include="system\system.h">
       <Filter>Header Files\system</Filter>
     </ClInclude>
+    <ClInclude Include="cuda\ccudatimespent.cu.h">
+      <Filter>Header Files\cuda</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="cuda\cuda.cu">

@@ -98,6 +98,7 @@
     <ClInclude Include="cuda\ccudacnn.cu.h" />
     <ClInclude Include="cuda\ccudamatrixstorage.cu.h" />
     <ClInclude Include="cuda\ccudasharedptr.cu.h" />
+    <ClInclude Include="cuda\ccudatimespent.cu.h" />
     <ClInclude Include="cuda\cuda.cu.h" />
     <ClInclude Include="cuda\handle_error.cu.h" />
     <ClInclude Include="cuda\math\ccudabackconvolution.cu.h" />

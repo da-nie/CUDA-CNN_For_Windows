@@ -11,7 +11,9 @@
 #include "../../common/cmatrix.h"
 #include "../handle_error.cu.h"
 #include "../ccudamatrixstorage.cu.h"
+#include "../ccudatimespent.cu.h"
 #include "../../system/system.h"
+
 
 //****************************************************************************************************
 //подключаемые библиотеки
@@ -32,7 +34,7 @@ template<class type_t>
 class CCUDAForwardConvolution;
 
 template<class type_t>
-__global__ void CUDAForwardConvolutionFunction(CCUDAForwardConvolution<type_t> cCUDAForwardConvolution,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth);//функция CUDA для вычисления свёртки
+__global__ void CUDAForwardConvolutionFunction(CCUDAForwardConvolution<type_t> cCUDAForwardConvolution,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t kernel_amount);//функция CUDA для вычисления свёртки
 
 //****************************************************************************************************
 //класс выполнения прямой свёртки в CUDA
@@ -61,7 +63,7 @@ class CCUDAForwardConvolution
   //-открытые функции-----------------------------------------------------------------------------------
   __host__ void Release(void);//очистить память
   __host__ void ForwardConvolution(size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t &output_width,size_t &output_height);//выполнить свёртку
-  __device__ void ForwardConvolutionProcessing(size_t image_index,size_t kernel_index,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t y);//процесс рассчёта свёртки
+  __device__ void ForwardConvolutionProcessing(size_t image_index,size_t kernel_index,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t kernel_amount,size_t x,size_t y);//процесс рассчёта свёртки
   __host__ static void Test(void);//протестировать класс
  private:
   //-закрытые функции-----------------------------------------------------------------------------------
@@ -92,50 +94,42 @@ __host__ CCUDAForwardConvolution<type_t>::~CCUDAForwardConvolution()
 //процесс рассчёта свёртки
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAForwardConvolution<type_t>::ForwardConvolutionProcessing(size_t image_index,size_t kernel_index,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t y)
+__device__ void CCUDAForwardConvolution<type_t>::ForwardConvolutionProcessing(size_t image_index,size_t kernel_index,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t kernel_amount,size_t x,size_t y)
 {
  size_t output_width=image_width-kernel_width+1;
  size_t output_height=image_height-kernel_height+1;
 
- size_t output_index=image_index;
- type_t *kernel_ptr=cCUDAMatrixStorage_Kernel.GetItemPtr(kernel_index);
- type_t *bias_ptr=cCUDAMatrixStorage_Bias.GetItemPtr(kernel_index);
- type_t *image_ptr=cCUDAMatrixStorage_Image.GetItemPtr(image_index);
- type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(output_index)+kernel_index*output_width*output_height;
-
  size_t padding=0;
  size_t step=1;
 
- //for(size_t y=0;y<output_height;y++)
+ type_t *image_ptr=cCUDAMatrixStorage_Image.GetItemPtr(image_index);
+  
+ size_t offset_kernel_ptr=(y*output_width+x); 
+ type_t *kernel_ptr=cCUDAMatrixStorage_Kernel.GetItemPtr(kernel_index);
+ type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(image_index)+(kernel_index*output_width*output_height)+offset_kernel_ptr;
+ type_t *bias_ptr=cCUDAMatrixStorage_Bias.GetItemPtr(kernel_index);  
+ type_t sum=*bias_ptr;//сразу прибавляем смещение
+ for(size_t i=0;i<kernel_height;i++)
  {
-  for(size_t x=0;x<output_width;x++)
+  int32_t i0=static_cast<int32_t>(step*y+i);
+  i0-=static_cast<int32_t>(padding);
+  if (i0<0 || i0>=image_height) continue;
+  for(size_t j=0;j<kernel_width;j++)
   {
-   type_t sum=*bias_ptr;//сразу прибавляем смещение
-   //проходимся фильтрами
-   for(size_t i=0;i<kernel_height;i++)
+   int32_t j0=static_cast<int32_t>(step*x+j);
+   j0-=static_cast<int32_t>(padding);    
+   if (j0<0 || j0>=image_width) continue;
+   size_t offset_i_ptr=i0*image_width+j0;
+   size_t offset_d_ptr=i*kernel_width+j;
+   for(size_t d=0;d<image_depth;d++)
    {
-    int32_t i0=static_cast<int32_t>(step*y+i);
-    i0-=static_cast<int32_t>(padding);
-    if (i0<0 || i0>=image_height) continue;
-    for(size_t j=0;j<kernel_width;j++)
-	{
-     int32_t j0=static_cast<int32_t>(step*x+j);
-	 j0-=static_cast<int32_t>(padding);
-     //поскольку вне границ входного тензора элементы нулевые, то просто игнорируем их
-     if (j0<0 || j0>=image_width) continue;
-     //проходимся по всей глубине тензора и считаем сумму
-     for(size_t c=0;c<image_depth;c++)
-	 {
-      type_t *i_ptr=image_ptr+c*image_width*image_height+i0*image_width+j0;
-	  type_t *k_ptr=kernel_ptr+c*kernel_width*kernel_height+i*kernel_width+j;
-	  sum+=(*i_ptr)*(*k_ptr);
-	 }
-    }
+    type_t *i_ptr=image_ptr+d*image_width*image_height+offset_i_ptr;
+    type_t *k_ptr=kernel_ptr+d*kernel_width*kernel_height+offset_d_ptr;
+	sum+=(*i_ptr)*(*k_ptr);
    }
-   type_t *o_ptr=output_ptr+y*output_width+x;
-   *o_ptr=sum;//записываем результат свёртки в выходной тензор
   }
  }
+ *output_ptr=sum;//записываем результат свёртки в выходной тензор
 }
 
 //****************************************************************************************************
@@ -159,8 +153,6 @@ __host__ void CCUDAForwardConvolution<type_t>::Release(void)
 template<class type_t>
 __host__ void CCUDAForwardConvolution<type_t>::ForwardConvolution(size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t &output_width,size_t &output_height)
 {
- double begin_time=GetSecondCounter();
-
  if (cCUDAMatrixStorage_Kernel.GetSizeX()!=kernel_width*kernel_height) throw "CCUDAForwardConvolution<type_t>::ForwardConvolution: ширина матрицы ядер должна соответствовать количеству элементов одного ядра";
  if (cCUDAMatrixStorage_Kernel.GetSizeY()!=cCUDAMatrixStorage_Image.GetSizeY()) throw "CCUDAForwardConvolution<type_t>::ForwardConvolution: высота матрицы ядер должна совпадать с высотой матрицы входного изображения";
  if (cCUDAMatrixStorage_Bias.GetSizeY()*cCUDAMatrixStorage_Bias.GetSizeX()!=1) throw "CCUDAForwardConvolution<type_t>::ForwardConvolution: размер матрицы смещений должен быть 1x1";
@@ -179,15 +171,18 @@ __host__ void CCUDAForwardConvolution<type_t>::ForwardConvolution(size_t image_w
  CCUDAMatrixStorage<type_t> cCUDAMatrixStorage(kernel_amount,output_height*output_width,image_amount);
  cCUDAMatrixStorage.Create();
  cCUDAMatrixStorage_Output.Move(cCUDAMatrixStorage);
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
  //выполняем свёртку
- dim3 grid(image_amount,output_height);
- CUDAForwardConvolutionFunction<<<grid,kernel_amount>>>(*this,image_width,image_height,kernel_width,kernel_height,image_depth);
+ dim3 grid(image_amount*kernel_amount,output_height);
+ CUDAForwardConvolutionFunction<<<grid,output_width>>>(*this,image_width,image_height,kernel_width,kernel_height,image_depth,kernel_amount);
  HANDLE_ERROR(cudaGetLastError());
  HANDLE_ERROR(cudaDeviceSynchronize());
 
- double delta_t=GetSecondCounter()-begin_time;
+ float gpu_time=cCUDATimeSpent.Stop();
  char str[255];
- sprintf(str,"ForwardConvolution: %.4f second\r\n",delta_t);
+ sprintf(str,"ForwardConvolution: %.2f millisecond\r\n",gpu_time);
  //PutMessageToConsole(str);
 }
 
@@ -269,12 +264,14 @@ __host__ void CCUDAForwardConvolution<type_t>::Test(void)
 //функция CUDA для вычисления свёртки
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__global__ void CUDAForwardConvolutionFunction(CCUDAForwardConvolution<type_t> cCUDAForwardConvolution,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth)
+__global__ void CUDAForwardConvolutionFunction(CCUDAForwardConvolution<type_t> cCUDAForwardConvolution,size_t image_width,size_t image_height,size_t kernel_width,size_t kernel_height,size_t image_depth,size_t kernel_amount)
 {
- size_t kernel_index=threadIdx.x;
- size_t image_index=blockIdx.x;
+ size_t s=blockIdx.x;
+ size_t image_index=s/kernel_amount;
+ size_t kernel_index=s%kernel_amount;
  size_t y=blockIdx.y;
- cCUDAForwardConvolution.ForwardConvolutionProcessing(image_index,kernel_index,image_width,image_height,kernel_width,kernel_height,image_depth,y);
+ size_t x=threadIdx.x;
+ cCUDAForwardConvolution.ForwardConvolutionProcessing(image_index,kernel_index,image_width,image_height,kernel_width,kernel_height,image_depth,kernel_amount,x,y);
 }
 
 #endif

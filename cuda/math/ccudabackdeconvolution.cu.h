@@ -10,6 +10,7 @@
 
 #include "../handle_error.cu.h"
 #include "../ccudamatrixstorage.cu.h"
+#include "../ccudatimespent.cu.h"
 #include "../../system/system.h"
 
 //****************************************************************************************************
@@ -59,7 +60,7 @@ class CCUDABackDeConvolution
   //-открытые функции-----------------------------------------------------------------------------------
   __host__ void Release(void);//очистить память
   __host__ void BackDeConvolution(size_t delta_width,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t &output_width,size_t &output_height);//выполнить свёртку
-  __device__ void BackDeConvolutionProcessing(size_t delta_index,size_t delta_width,size_t depth_index,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t delta_depth,size_t kernel_depth,size_t kernel_amount,size_t y);//процесс рассчёта свёртки
+  __device__ void BackDeConvolutionProcessing(size_t delta_index,size_t kernel_depth_index,size_t delta_width,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t delta_depth,size_t kernel_depth,size_t kernel_amount,size_t x,size_t y);//процесс рассчёта свёртки
   __host__ static void Test(void);//протестировать класс
  private:
   //-закрытые функции-----------------------------------------------------------------------------------
@@ -90,54 +91,45 @@ __host__ CCUDABackDeConvolution<type_t>::~CCUDABackDeConvolution()
 //процесс рассчёта свёртки
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDABackDeConvolution<type_t>::BackDeConvolutionProcessing(size_t delta_index,size_t delta_width,size_t depth_index,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t delta_depth,size_t kernel_depth,size_t kernel_amount,size_t y)
+__device__ void CCUDABackDeConvolution<type_t>::BackDeConvolutionProcessing(size_t delta_index,size_t kernel_depth_index,size_t delta_width,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t delta_depth,size_t kernel_depth,size_t kernel_amount,size_t x,size_t y)
 {
  size_t output_width=delta_width+kernel_width-1;
  size_t output_height=delta_height+kernel_height-1;
 
  type_t *delta_ptr=cCUDAMatrixStorage_Delta.GetItemPtr(delta_index);
- type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(delta_index);
+ type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(delta_index)+kernel_depth_index*output_width*output_height+y*output_width+x;
 
  size_t padding=0;
  size_t step=1;
  padding=kernel_width-1-padding;
 
- //расчитываем значения градиента
- //for(size_t y=0;y<output_height;y++)
+ size_t kernel_depth_offset=kernel_depth_index*kernel_width*kernel_height;
+ type_t sum=0;//сумма для градиента
+ //идём по всем весовым коэффициентам фильтров
+ for(size_t i=0;i<kernel_height;i++)
  {
-  for(size_t x=0;x<output_width;x++)
+  int32_t i0=static_cast<int32_t>(y+i);
+  i0-=static_cast<int32_t>(padding);
+  if (i0<0 || i0>=delta_height) continue;
+  for(size_t j=0;j<kernel_width;j++)
   {
-   size_t c=depth_index;//распараллеливаем по глубине
-   //for(size_t c=0;c<kernel_depth;c++)//TODO можно распараллелить ещё и по глубине
+   size_t j0=static_cast<int32_t>(x+j);
+   j0-=static_cast<int32_t>(padding);
+   //игнорируем выходящие за границы элементы
+   if (j0<0 || j0>=delta_width) continue;
+   //суммируем по всем фильтрам
+   size_t offset_k_ptr=(kernel_height-1-i)*kernel_width+(kernel_width-1-j)+kernel_depth_offset;
+   size_t offset_d_ptr=i0*delta_width+j0;
+   for(size_t k=0;k<kernel_amount;k++)
    {
-    type_t sum=0;//сумма для градиента
-    //идём по всем весовым коэффициентам фильтров
-    for(size_t i=0;i<kernel_height;i++)
-	{
-     int32_t i0=static_cast<int32_t>(y+i);
-     i0-=static_cast<int32_t>(padding);
-     if (i0<0 || i0>=delta_height) continue;
-     for(size_t j=0;j<kernel_width;j++)
-	 {
-      size_t j0=static_cast<int32_t>(x+j);
-	  j0-=static_cast<int32_t>(padding);
-      //игнорируем выходящие за границы элементы
-      if (j0<0 || j0>=delta_width) continue;
-      //суммируем по всем фильтрам
-      for(size_t f=0;f<kernel_amount;f++)
-	  {
-       type_t *d_ptr=delta_ptr+f*delta_width*delta_height+i0*delta_width+j0;
-	   type_t *kernel_ptr=cCUDAMatrixStorage_Kernel.GetItemPtr(f);
-	   type_t *k_ptr=kernel_ptr+c*kernel_width*kernel_height+(kernel_height-1-i)*kernel_width+(kernel_width-1-j);
-	   sum+=(*k_ptr)*(*d_ptr);//добавляем произведение повёрнутых фильтров на дельты
-      }
-     }
-	}
-	type_t *o_ptr=output_ptr+c*output_width*output_height+y*output_width+x;
-	*o_ptr=sum;//записываем результат в тензор градиента
+    type_t *d_ptr=delta_ptr+k*delta_width*delta_height+offset_d_ptr;
+	type_t *kernel_ptr=cCUDAMatrixStorage_Kernel.GetItemPtr(k);
+    type_t *k_ptr=kernel_ptr+offset_k_ptr;
+    sum+=(*k_ptr)*(*d_ptr);//добавляем произведение повёрнутых фильтров на дельты
    }
   }
  }
+ *output_ptr=sum;//записываем результат в тензор градиента
 }
 
 //****************************************************************************************************
@@ -165,12 +157,13 @@ __host__ void CCUDABackDeConvolution<type_t>::BackDeConvolution(size_t delta_wid
 
  if (cCUDAMatrixStorage_Kernel.GetSizeX()!=kernel_width*kernel_height) throw "CCUDABackDeConvolution<type_t>::DeConvolution: ширина матрицы ядер должна соответствовать количеству элементов одного ядра";
  if (cCUDAMatrixStorage_Delta.GetSizeX()!=delta_width*delta_height) throw "CCUDABackDeConvolution<type_t>::DeConvolution: ширина матрицы дельт должна соответствовать количеству элементов одной дельты";
-
  //параметры свёртки
  size_t delta_depth=cCUDAMatrixStorage_Delta.GetSizeY();//глубина дельт в одной матрице (соответствует количеству ядер)
  size_t delta_amount=cCUDAMatrixStorage_Delta.GetAmount();//количество дельт (соответствует количеству изображений)
  size_t kernel_depth=cCUDAMatrixStorage_Kernel.GetSizeY();//глубина ядер в одной матрице
  size_t kernel_amount=cCUDAMatrixStorage_Kernel.GetAmount();//количество ядер
+
+ if (delta_depth!=kernel_amount) throw "CCUDABackDeConvolution<type_t>::DeConvolution: глубина матрицы дельт должна быть равна количеству ядер";
 
  output_width=delta_width+kernel_width-1;
  output_height=delta_height+kernel_height-1;
@@ -180,15 +173,19 @@ __host__ void CCUDABackDeConvolution<type_t>::BackDeConvolution(size_t delta_wid
  CCUDAMatrixStorage<type_t> cCUDAMatrixStorage_A(kernel_depth,output_height*output_width,delta_amount);
  cCUDAMatrixStorage_A.Create();
  cCUDAMatrixStorage_Output.Move(cCUDAMatrixStorage_A);
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
  //выполняем свёртку
- dim3 grid_a(delta_amount,output_height);
- CUDABackDeConvolutionFunction<<<grid_a,kernel_depth>>>(*this,delta_width,delta_height,kernel_width,kernel_height,delta_depth,kernel_depth,kernel_amount);
+ dim3 grid(delta_amount*kernel_depth,output_height);
+ CUDABackDeConvolutionFunction<<<grid,output_width>>>(*this,delta_width,delta_height,kernel_width,kernel_height,delta_depth,kernel_depth,kernel_amount);
  HANDLE_ERROR(cudaGetLastError());
  HANDLE_ERROR(cudaDeviceSynchronize());
 
- double delta_t=GetSecondCounter()-begin_time;
+ float gpu_time=cCUDATimeSpent.Stop();
  char str[255];
- sprintf(str,"BackDeConvolution: %.4f second\r\n",delta_t);
+ sprintf(str,"BackDeConvolution: %.4f millisecond\r\n",gpu_time);
  //PutMessageToConsole(str);
 }
 
@@ -263,10 +260,12 @@ __host__ void CCUDABackDeConvolution<type_t>::Test(void)
 template<class type_t>
 __global__ void CUDABackDeConvolutionFunction(CCUDABackDeConvolution<type_t> cCUDABackDeConvolution,size_t delta_width,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t delta_depth,size_t kernel_depth,size_t kernel_amount)
 {
- size_t delta_index=blockIdx.x;
- size_t depth_index=threadIdx.x;
+ size_t s=blockIdx.x;
+ size_t delta_index=s/kernel_depth;
+ size_t kernel_depth_index=s%kernel_depth;
+ size_t x=threadIdx.x;
  size_t y=blockIdx.y;
- cCUDABackDeConvolution.BackDeConvolutionProcessing(delta_index,delta_width,depth_index,delta_height,kernel_width,kernel_height,delta_depth,kernel_depth,kernel_amount,y);
+ cCUDABackDeConvolution.BackDeConvolutionProcessing(delta_index,kernel_depth_index,delta_width,delta_height,kernel_width,kernel_height,delta_depth,kernel_depth,kernel_amount,x,y);
 }
 
 #endif
