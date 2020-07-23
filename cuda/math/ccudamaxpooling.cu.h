@@ -10,6 +10,7 @@
 
 #include "../handle_error.cu.h"
 #include "../ccudamatrixstorage.cu.h"
+#include "../ccudatimespent.cu.h"
 #include "../../system/system.h"
 
 //****************************************************************************************************
@@ -169,8 +170,6 @@ __host__ void CCUDAMaxPooling<type_t>::SetMatrixAmount(size_t matrix_amount)
 template<class type_t>
 __host__ void CCUDAMaxPooling<type_t>::MaxPooling(size_t image_width,size_t image_height,size_t pooling_width,size_t pooling_height,size_t &output_width,size_t &output_height)
 {
- double begin_time=GetSecondCounter();
-
  if (cCUDAMatrixStorage_Input.GetAmount()!=MatrixAmount) throw "CCUDAMaxPooling<type_t>::MaxPooling: количество матриц в наборе изображений должно быть равно количеству матриц, для которого создавался класс";
  if (pooling_width==0 || pooling_height==0) throw "CCUDAMaxPooling<type_t>::MaxPooling: ширина и высота субдискретизации не могут быть нулевыми";
  if (cCUDAMatrixStorage_Input.GetSizeY()!=1) throw "CCUDAMaxPooling<type_t>::MaxPooling: высота входного изображения должна быть равна 1";
@@ -192,13 +191,18 @@ __host__ void CCUDAMaxPooling<type_t>::MaxPooling(size_t image_width,size_t imag
  cCUDAMatrixStorage_Index.Create();
  cCUDAMatrixStorage_OutputIndex.Move(cCUDAMatrixStorage_Index);
 
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
  //выполняем субдискретизацию
  CUDAMaxPoolingFunction<<<MatrixAmount*image_amount,1>>>(*this,image_width,image_height,pooling_width,pooling_height);
  HANDLE_ERROR(cudaGetLastError());
  HANDLE_ERROR(cudaDeviceSynchronize());
 
- double delta_t=GetSecondCounter()-begin_time;
- //printf("MaxPooling: %.4f second\r\n",delta_t);
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"MaxPooling: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
 }
 
 //****************************************************************************************************

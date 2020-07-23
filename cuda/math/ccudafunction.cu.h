@@ -10,6 +10,7 @@
 
 #include "../handle_error.cu.h"
 #include "../ccudamatrixstorage.cu.h"
+#include "../ccudatimespent.cu.h"
 #include "../../system/system.h"
 
 //****************************************************************************************************
@@ -27,38 +28,6 @@
 //****************************************************************************************************
 //предварительные объявления
 //****************************************************************************************************
-template<class type_t>
-class CCUDAFunction;
-
-template<class type_t>
-__global__ void CUDASigmoidFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения функции сигмоид
-
-template<class type_t>
-__global__ void CUDALinearFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения линейной функции
-
-template<class type_t>
-__global__ void CUDAReLUFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения функции ReLU
-
-template<class type_t>
-__global__ void CUDALeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения функции Leaky ReLU
-
-template<class type_t>
-__global__ void CUDATangenceFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения функции гиперболический тангенс
-
-template<class type_t>
-__global__ void CUDADifferentialSigmoidFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения производной функции сигмоид
-
-template<class type_t>
-__global__ void CUDADifferentialLinearFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения производной линейной функции
-
-template<class type_t>
-__global__ void CUDADifferentialReLUFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения производной функции ReLU
-
-template<class type_t>
-__global__ void CUDADifferentialLeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения производной функции Leaky ReLU
-
-template<class type_t>
-__global__ void CUDADifferentialTangenceFunction(CCUDAFunction<type_t> cCUDAFunction);//функция CUDA для применения производной функции гиперболический тангенс
 
 //****************************************************************************************************
 //класс применения функции сигмоид в CUDA
@@ -100,17 +69,17 @@ class CCUDAFunction
   __host__ void ApplyDifferentialLinear(void);//применить производную линейной функций
   __host__ void ApplyDifferentialTangence(void);//применить функцию производной от гиперболического тангенса
 
-  __device__ void ApplySigmoidProcessing(size_t index);//процесс применения функции сигмоид
-  __device__ void ApplyReLUProcessing(size_t index);//процесс применения функции ReLU
-  __device__ void ApplyLeakyReLUProcessing(size_t index);//процесс применения функции Leaky ReLU
-  __device__ void ApplyLinearProcessing(size_t index);//процесс применения линейной функции
-  __device__ void ApplyTangenceProcessing(size_t index);//процесс применения функции гиперболический тангенс
+  __device__ void ApplySigmoidProcessing(size_t index,size_t y);//процесс применения функции сигмоид
+  __device__ void ApplyReLUProcessing(size_t index,size_t y);//процесс применения функции ReLU
+  __device__ void ApplyLeakyReLUProcessing(size_t index,size_t y);//процесс применения функции Leaky ReLU
+  __device__ void ApplyLinearProcessing(size_t index,size_t y);//процесс применения линейной функции
+  __device__ void ApplyTangenceProcessing(size_t index,size_t y);//процесс применения функции гиперболический тангенс
 
-  __device__ void ApplyDifferentialSigmoidProcessing(size_t index);//процесс применения производной функции сигмоид
-  __device__ void ApplyDifferentialReLUProcessing(size_t index);//процесс применения производной функции ReLU
-  __device__ void ApplyDifferentialLeakyReLUProcessing(size_t index);//процесс применения производной функции Leaky ReLU
-  __device__ void ApplyDifferentialLinearProcessing(size_t index);//процесс применения производной линейной функции
-  __device__ void ApplyDifferentialTangenceProcessing(size_t index);//процесс применения производной функции гиперболический тангенс
+  __device__ void ApplyDifferentialSigmoidProcessing(size_t index,size_t y);//процесс применения производной функции сигмоид
+  __device__ void ApplyDifferentialReLUProcessing(size_t index,size_t y);//процесс применения производной функции ReLU
+  __device__ void ApplyDifferentialLeakyReLUProcessing(size_t index,size_t y);//процесс применения производной функции Leaky ReLU
+  __device__ void ApplyDifferentialLinearProcessing(size_t index,size_t y);//процесс применения производной линейной функции
+  __device__ void ApplyDifferentialTangenceProcessing(size_t index,size_t y);//процесс применения производной функции гиперболический тангенс
  private:
   //-закрытые функции-----------------------------------------------------------------------------------
   __host__ __device__ type_t Sigmoid(type_t v);//сигмоид
@@ -242,218 +211,479 @@ __host__ __device__ type_t CCUDAFunction<type_t>::dTangence(type_t v)
  return(1-t*t);
 }
 
+
+
+
+
+
+
+
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения функции сигмоид
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDASigmoidFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplySigmoidProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения функции сигмоид
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplySigmoidProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplySigmoidProcessing(size_t index,size_t y)
 	{
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
- {
   for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
   {
    type_t value=*m_input_ptr;
    *m_output_ptr=Sigmoid(value);
   }
- }
+
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию сигмоид
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplySigmoid(void)
+{
+ Init();
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
+ CUDASigmoidFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"ApplySigmoid: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения функции ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDAReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyReLUProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения функции ReLU
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyReLUProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyReLUProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=ReLU(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=ReLU(value);
  }
+}
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyReLU(void)
+{
+ Init();
+ CUDAReLUFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения функции Leaky ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDALeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyLeakyReLUProcessing(index,y);
 }
 
 //----------------------------------------------------------------------------------------------------
 //процесс применения функции Leaky ReLU
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyLeakyReLUProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyLeakyReLUProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=LeakyReLU(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=LeakyReLU(value);
  }
+}
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию Leaky ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyLeakyReLU(void)
+{
+ Init();
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
+ CUDALeakyReLUFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"ApplyLeakyReLU: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
+}
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения линейной функции
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDALinearFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplySigmoidProcessing(index,y);
 }
 
 //----------------------------------------------------------------------------------------------------
 //процесс применения линейной функции
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyLinearProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyLinearProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=Linear(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=Linear(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить линейную функцию
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyLinear(void)
+{
+ Init();
+ CUDALinearFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения функции гиперболический тангенс
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDATangenceFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyTangenceProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения функции гиперболический тангенс
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyTangenceProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyTangenceProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=Tangence(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=Tangence(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию гиперболический тангенс
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyTangence(void)
+{
+ Init();
+ CUDATangenceFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной функции сигмоид
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialSigmoidFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialSigmoidProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения производной функции сигмоид
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyDifferentialSigmoidProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialSigmoidProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=dSigmoid(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=dSigmoid(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию производной от сигмоида
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialSigmoid(void)
+{
+ Init();
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
+ CUDADifferentialSigmoidFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"ApplyDifferentialSigmoid: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной функции ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialReLUProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения производной функции ReLU
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyDifferentialReLUProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialReLUProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=dReLU(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=dReLU(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию производной от ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialReLU(void)
+{
+ Init();
+ CUDADifferentialReLUFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной функции Leaky ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialLeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialLeakyReLUProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения производной функции Leaky ReLU
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyDifferentialLeakyReLUProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialLeakyReLUProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=dLeakyReLU(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=dLeakyReLU(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию производной от Leaky ReLU
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialLeakyReLU(void)
+{
+ Init();
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
+ CUDADifferentialLeakyReLUFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"ApplyDifferentialLeakyReLU: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной линейной функции
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialLinearFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialLinearProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения производной линейной функции
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyDifferentialLinearProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialLinearProcessing(size_t index,size_t y)
 	{
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=dLinear(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=dLinear(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить производную линейной функций
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialLinear(void)
+{
+ Init();
+ CUDADifferentialLinearFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной функции гиперболический тангенс
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialTangenceFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialTangenceProcessing(index,y);
+}
+
 //----------------------------------------------------------------------------------------------------
 //процесс применения производной функции гиперболический тангенс
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-__device__ void CCUDAFunction<type_t>::ApplyDifferentialTangenceProcessing(size_t index)
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialTangenceProcessing(size_t index,size_t y)
 {
  size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
  size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
 
- type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index);
- type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index)+y*input_x;
 
- for(size_t y=0;y<input_y;y++)
+ for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
  {
-  for(size_t x=0;x<input_x;x++,m_output_ptr++,m_input_ptr++)
-  {
-   type_t value=*m_input_ptr;
-   *m_output_ptr=dTangence(value);
-  }
+  type_t value=*m_input_ptr;
+  *m_output_ptr=dTangence(value);
  }
 }
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию производной от гиперболического тангенса
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialTangence(void)
+{
+ Init();
+ CUDADifferentialTangenceFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+
 //----------------------------------------------------------------------------------------------------
 //инициализация
 //----------------------------------------------------------------------------------------------------
@@ -491,229 +721,5 @@ __host__ void CCUDAFunction<type_t>::SetMatrixAmount(size_t matrix_amount)
  MatrixAmount=matrix_amount;
 }
 
-//----------------------------------------------------------------------------------------------------
-//применить функцию сигмоид
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplySigmoid(void)
-{
- Init();
- CUDASigmoidFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyReLU(void)
-{
- Init();
- CUDAReLUFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию Leaky ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyLeakyReLU(void)
-{
- Init();
- CUDALeakyReLUFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить линейную функцию
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyLinear(void)
-{
- Init();
- CUDALinearFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию гиперболический тангенс
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyTangence(void)
-{
- Init();
- CUDATangenceFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию производной от сигмоида
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyDifferentialSigmoid(void)
-{
- Init();
- CUDADifferentialSigmoidFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию производной от ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyDifferentialReLU(void)
-{
- Init();
- CUDADifferentialReLUFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию производной от Leaky ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyDifferentialLeakyReLU(void)
-{
- Init();
- CUDADifferentialLeakyReLUFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить производную линейной функций
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyDifferentialLinear(void)
-{
- Init();
- CUDADifferentialLinearFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//----------------------------------------------------------------------------------------------------
-//применить функцию производной от гиперболического тангенса
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__host__ void CCUDAFunction<type_t>::ApplyDifferentialTangence(void)
-{
- Init();
- CUDADifferentialTangenceFunction<<<MatrixAmount,1>>>(*this);
- HANDLE_ERROR(cudaGetLastError());
- HANDLE_ERROR(cudaDeviceSynchronize());
-}
-//****************************************************************************************************
-//прочее
-//****************************************************************************************************
-
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения функции сигмоид
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDASigmoidFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplySigmoidProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения линейной функции
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDALinearFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplySigmoidProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения функции ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDAReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyReLUProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения функции Leaky ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDALeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyLeakyReLUProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения функции гиперболический тангенс
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDATangenceFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyTangenceProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения производной функции сигмоид
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDADifferentialSigmoidFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyDifferentialSigmoidProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения производной линейной функции
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDADifferentialLinearFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyDifferentialLinearProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения производной функции ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDADifferentialReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyDifferentialReLUProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения производной функции Leaky ReLU
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDADifferentialLeakyReLUFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyDifferentialLeakyReLUProcessing(index);
-}
-//----------------------------------------------------------------------------------------------------
-//функция CUDA для применения производной функции гиперболический тангенс
-//----------------------------------------------------------------------------------------------------
-template<class type_t>
-__global__ void CUDADifferentialTangenceFunction(CCUDAFunction<type_t> cCUDAFunction)
-{
- size_t y=blockIdx.x;
-// size_t x=threadIdx.x;
- size_t index=y;
- cCUDAFunction.ApplyDifferentialTangenceProcessing(index);
-}
 
 #endif

@@ -35,10 +35,10 @@ template<class type_t>
 __global__ void CUDAZeroFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t image_width,size_t image_height,size_t delta_width,size_t delta_height,size_t image_depth,size_t image_amount);//функция CUDA для очистки свёртки
 
 template<class type_t>
-__global__ void CUDABackConvolutionFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t delta_index,size_t image_width,size_t image_height,size_t delta_width,size_t delta_height,size_t image_depth,size_t image_amount);//функция CUDA для вычисления свёртки
+__global__ void CUDABackConvolutionFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t image_width,size_t image_height,size_t delta_width,size_t delta_height,size_t image_depth,size_t image_amount);//функция CUDA для вычисления свёртки
 
 template<class type_t>
-__global__ void CUDASummFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t output_width,size_t output_height,size_t image_amount);//функция CUDA для вычисления суммы коэффициентов
+__global__ void CUDASummFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t output_width,size_t output_height,size_t delta_width,size_t delta_height,size_t image_amount);//функция CUDA для вычисления суммы коэффициентов
 
 template<class type_t>
 __global__ void CUDASummBiasFunction(CCUDABackConvolution<type_t> cCUDABackConvolution,size_t delta_width,size_t delta_height,size_t image_amount);//функция CUDA для вычисления суммы смещений
@@ -126,10 +126,10 @@ __device__ void CCUDABackConvolution<type_t>::ZeroProcessing(size_t image_index,
   for(size_t y=0;y<output_height;y++)
   {
    for(size_t x=0;x<output_width;x++)
-   {    
+   {
     size_t offset=d*output_width*output_height*image_amount;
     offset+=y*output_width;
-	offset+=x;	
+	offset+=x;
 	offset*=delta_width;
     for(size_t dy=0;dy<delta_height;dy++,offset++)
     {
@@ -140,7 +140,7 @@ __device__ void CCUDABackConvolution<type_t>::ZeroProcessing(size_t image_index,
  }
  for(size_t dy=0;dy<delta_height;dy++,output_bias_ptr++)
  {
-  *output_bias_ptr=0;  
+  *output_bias_ptr=0;
  }
 }
 
@@ -151,7 +151,7 @@ __device__ void CCUDABackConvolution<type_t>::ZeroProcessing(size_t image_index,
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
 __device__ void CCUDABackConvolution<type_t>::BackConvolutionProcessing(size_t image_index,size_t delta_index,size_t image_width,size_t image_height,size_t delta_width,size_t delta_height,size_t image_depth,size_t image_amount,size_t x,size_t output_pos)
-{ 
+{
  size_t output_width=image_width-delta_width+1;
  size_t output_height=image_height-delta_height+1;
 
@@ -184,12 +184,12 @@ __device__ void CCUDABackConvolution<type_t>::BackConvolutionProcessing(size_t i
      j0-=static_cast<int32_t>(padding);
      if (j0<0 || j0>=image_width) continue;
      //наращиваем градиент фильтра
-     for(size_t d=0;d<image_depth;d++)
+	 for(size_t d=0;d<image_depth;d++)
      {
       type_t *i_ptr=image_ptr+d*image_width*image_height+i0*image_width+j0;
 	  type_t *o_ptr=output_ptr+(d*output_width*output_height*image_amount+i*output_width+j)*delta_width;
 	  (*o_ptr)+=delta*(*i_ptr);
-     }	 
+     }
     }
    }
    if (output_pos==0) *output_bias_ptr+=delta;//наращиваем градиент смещения
@@ -208,17 +208,17 @@ __device__ void CCUDABackConvolution<type_t>::SummProcessing(size_t depth_index,
  //суммируем
  for(size_t n=0;n<output_width*output_height;n++)
  {
-  type_t summ=0;  
+  double summ=0;//чтобы не потерять в точности
   for(size_t m=0;m<image_amount;m++)
-  {   
+  {
    size_t offset=(n+m*output_width*output_height)*delta_width;
    for(size_t dy=0;dy<delta_height;dy++,offset++)
    {
     type_t v=*(input_ptr+offset);
     summ+=v;
    }
-  }  
-  *(output_ptr+n)=summ;
+  }
+  *(output_ptr+n)=static_cast<type_t>(summ);
  }
 }
 
@@ -231,9 +231,9 @@ __device__ void CCUDABackConvolution<type_t>::SummBiasProcessing(size_t kernel_i
  type_t *input_ptr=cCUDAMatrixStorage_MiddleOutputBias.GetItemPtr(kernel_index);
  type_t *output_ptr=cCUDAMatrixStorage_OutputBias.GetItemPtr(kernel_index);
  //суммируем
- type_t summ=0;
+ double summ=0;//чтобы не потерять в точности 
  for(size_t m=0;m<image_amount*delta_width;m++,input_ptr++) summ+=(*input_ptr);
- *(output_ptr)=summ;
+ *(output_ptr)=static_cast<type_t>(summ);
 }
 
 //****************************************************************************************************
@@ -295,7 +295,7 @@ __host__ void CCUDABackConvolution<type_t>::BackConvolution(size_t image_width,s
 
  CCUDATimeSpent cCUDATimeSpent;
  cCUDATimeSpent.Start();
- 
+
  //очищаем свёртки
  CUDAZeroFunction<<<image_amount,delta_depth>>>(*this,image_width,image_height,delta_width,delta_height,image_depth,image_amount);
  HANDLE_ERROR(cudaGetLastError());
@@ -328,8 +328,8 @@ __host__ void CCUDABackConvolution<type_t>::BackConvolution(size_t image_width,s
  float gpu_time=cCUDATimeSpent.Stop();
 
  char str[255];
- sprintf(str,"BackConvolution: %.4f millisecond\r\n",gpu_time);
- PutMessageToConsole(str);
+ sprintf(str,"BackConvolution: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -359,7 +359,7 @@ __host__ void CCUDABackConvolution<type_t>::Test(void)
  size_t backward_conv_a_width;
  size_t backward_conv_a_height;
  cCUDABackConvolution_A.BackConvolution(4,4,2,2,backward_conv_a_width,backward_conv_a_height);
- 
+
  //проверяем результат
  if (cCUDABackConvolution_A.cCUDAMatrixStorage_Output.GetAmount()!=2) throw "Класс CCUDABackConvolution провалил тестирование!";
  CMatrix<type_t> cMatrix_1(cCUDABackConvolution_A.cCUDAMatrixStorage_Output.GetSizeY(),cCUDABackConvolution_A.cCUDAMatrixStorage_Output.GetSizeX());
@@ -430,11 +430,11 @@ __global__ void CUDABackConvolutionFunction(CCUDABackConvolution<type_t> cCUDABa
  size_t delta_index=threadIdx.x;
  size_t image_index=blockIdx.x;
  size_t i=blockIdx.y;
- */	 
+ */
  size_t output_pos=blockIdx.x;
  size_t image_index=blockIdx.y%image_amount;
  size_t delta_index=blockIdx.y/image_amount;
- size_t x=threadIdx.x; 
+ size_t x=threadIdx.x;
  cCUDABackConvolution.BackConvolutionProcessing(image_index,delta_index,image_width,image_height,delta_width,delta_height,image_depth,image_amount,x,output_pos);
 }
 

@@ -1186,6 +1186,54 @@ void CCUDACNN<type_t>::ResetDeltaWeighAndBias(void)
 template<class type_t>
 void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
 {
+/*
+ for(size_t n=0;n<NN_LAYER_AMOUNT;n++)
+ {
+  CMatrix<type_t>::Mul(dLayerWeigh[n],dLayerWeigh[n],speed);
+  CMatrix<type_t>::Mul(dLayerBias[n],dLayerBias[n],speed);
+  CMatrix<type_t>::Sub(LayerWeigh[n],LayerWeigh[n],dLayerWeigh[n]);
+  CMatrix<type_t>::Sub(LayerBias[n],LayerBias[n],dLayerBias[n]);
+ }
+
+ bool error=true;
+ for(size_t n=0;n<KERNEL_A_AMOUNT;n++)
+ {
+  CMatrix<type_t>::Mul(dKernelA[n],dKernelA[n],speed);
+  CMatrix<type_t>::Mul(dKernelBiasA[n],dKernelBiasA[n],speed);
+
+  CMatrix<type_t>::Sub(KernelA[n],KernelA[n],dKernelA[n]);
+  CMatrix<type_t>::Sub(KernelBiasA[n],KernelBiasA[n],dKernelBiasA[n]);
+
+  for(size_t y=0;y<dKernelA[n].GetSizeY();y++)
+  {
+   for(size_t x=0;x<dKernelA[n].GetSizeX();x++)
+   {
+    type_t v=dKernelA[n].GetElement(y,x);
+    if (fabs(v)>1e-9) error=false;
+   }
+  }
+ }
+ for(size_t n=0;n<KERNEL_B_AMOUNT;n++)
+ {
+  CMatrix<type_t>::Mul(dKernelB[n],dKernelB[n],speed);
+  CMatrix<type_t>::Mul(dKernelBiasB[n],dKernelBiasB[n],speed);
+
+  CMatrix<type_t>::Sub(KernelB[n],KernelB[n],dKernelB[n]);
+  CMatrix<type_t>::Sub(KernelBiasB[n],KernelBiasB[n],dKernelBiasB[n]);
+
+  for(size_t y=0;y<dKernelB[n].GetSizeY();y++)
+  {
+   for(size_t x=0;x<dKernelB[n].GetSizeX();x++)
+   {
+    type_t v=dKernelB[n].GetElement(y,x);
+	if (fabs(v)>1e-9) error=false;
+   }
+  }
+ }
+ if (error==true) PutMessageToConsole("ЯДРА НЕ ОБУЧАЮТСЯ! ПОПРАВКИ БЛИЗКИ К НУЛЮ!\r\n");
+*/
+
+
  type_t gamma=0;
  for(size_t n=0;n<NN_LAYER_AMOUNT;n++)
  {
@@ -1251,6 +1299,7 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
   }
  }
  if (error==true) PutMessageToConsole("ЯДРА НЕ ОБУЧАЮТСЯ! ПОПРАВКИ БЛИЗКИ К НУЛЮ!\r\n");
+
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -1292,20 +1341,24 @@ void CCUDACNN<type_t>::TrainingNet(void)
    //очищаем добавки к весам и смещениям
    ResetDeltaWeighAndBias();
 
-   double cost;
+   double cost=0;
    bool only_cost=false;
    double net_begin_time=GetSecondCounter();
    if (NetProcessing(only_cost,max_cost,image_kit,cost)==false) throw "CCUDACNN<type_t>::NetProcessing ошибка выполнения";
 
-   //обновляем веса и смещения
-   UpdateWeighAndBias(speed/static_cast<double>(part_size));
-   SaveNet("cnn-neuronet.net");
+   if (cost>=max_cost) UpdateWeighAndBias(speed/static_cast<double>(part_size));//обновляем веса и смещения
 
    if (cost>current_max_cost) current_max_cost=cost;
    if (cost>=max_cost) training_done=false;
    double delta_t=GetSecondCounter()-net_begin_time;
    sprintf(str,"\tIteration:%i Part:%i cost:%f time:%f second\r\n",iteration+1,part_index,cost,delta_t);
    PutMessageToConsole(str);
+
+   //char net_name[255];
+   //sprintf(net_name,"cnn-neuronet-i%i-p%i-c%f.net",iteration,part_index,cost);
+   //SaveNet(net_name);
+
+   SaveNet("cnn-neuronet.net");
 
    image_counter-=part_size;
    image_index+=part_size;
@@ -1342,8 +1395,6 @@ void CCUDACNN<type_t>::Execute(void)
  //CCUDAMatrixStorage<float>::Test();
  CMatrix<float>::Test();
 
- //загружаем образы для обучения
- LoadImage();
  //инициализируем нейросеть
  InitNet();
  //загружаем нейросеть
@@ -1351,6 +1402,9 @@ void CCUDACNN<type_t>::Execute(void)
 
  //SaveKernelImage();
  //throw "stop";
+
+ //загружаем образы для обучения
+ LoadImage();
 
  //обучаем нейросеть
  TrainingNet();

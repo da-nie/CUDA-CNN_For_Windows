@@ -16,11 +16,11 @@ void CUDA_Start(void)
  int deviceCount;
  cudaDeviceProp devProp;
 
- cudaGetDeviceCount(&deviceCount);
+ HANDLE_ERROR(cudaGetDeviceCount(&deviceCount));
  printf("Found %d devices\n",deviceCount);
  for(int device=0;device<deviceCount;device++)
  {
-  cudaGetDeviceProperties(&devProp,device);
+  HANDLE_ERROR(cudaGetDeviceProperties(&devProp,device));
   printf("Device %d\n", device );
   printf("Compute capability     : %d.%d\n",devProp.major,devProp.minor);
   printf("Name                   : %s\n",devProp.name);

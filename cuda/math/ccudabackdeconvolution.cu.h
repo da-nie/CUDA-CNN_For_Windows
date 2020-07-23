@@ -153,8 +153,6 @@ __host__ void CCUDABackDeConvolution<type_t>::Release(void)
 template<class type_t>
 __host__ void CCUDABackDeConvolution<type_t>::BackDeConvolution(size_t delta_width,size_t delta_height,size_t kernel_width,size_t kernel_height,size_t &output_width,size_t &output_height)
 {
- double begin_time=GetSecondCounter();
-
  if (cCUDAMatrixStorage_Kernel.GetSizeX()!=kernel_width*kernel_height) throw "CCUDABackDeConvolution<type_t>::DeConvolution: ширина матрицы ядер должна соответствовать количеству элементов одного ядра";
  if (cCUDAMatrixStorage_Delta.GetSizeX()!=delta_width*delta_height) throw "CCUDABackDeConvolution<type_t>::DeConvolution: ширина матрицы дельт должна соответствовать количеству элементов одной дельты";
  //параметры свёртки
@@ -185,7 +183,7 @@ __host__ void CCUDABackDeConvolution<type_t>::BackDeConvolution(size_t delta_wid
 
  float gpu_time=cCUDATimeSpent.Stop();
  char str[255];
- sprintf(str,"BackDeConvolution: %.4f millisecond\r\n",gpu_time);
+ sprintf(str,"BackDeConvolution: %.2f millisecond\r\n",gpu_time);
  //PutMessageToConsole(str);
 }
 

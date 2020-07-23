@@ -10,6 +10,7 @@
 
 #include "../handle_error.cu.h"
 #include "../ccudamatrixstorage.cu.h"
+#include "../ccudatimespent.cu.h"
 #include "../../system/system.h"
 
 //****************************************************************************************************
@@ -143,8 +144,6 @@ __host__ void CCUDAMaxDePooling<type_t>::SetMatrixAmount(size_t matrix_amount)
 template<class type_t>
 __host__ void CCUDAMaxDePooling<type_t>::MaxDePooling(size_t image_width,size_t image_height,size_t output_width,size_t output_height)
 {
- double begin_time=GetSecondCounter();
-
  if (cCUDAMatrixStorage_Input.GetAmount()!=MatrixAmount) throw "CCUDAMaxDePooling<type_t>::MaxDePooling: количество матриц в наборе изображений должно быть равно количеству матриц, для которого создавался класс";
  if (cCUDAMatrixStorage_Input.GetAmount()!=cCUDAMatrixStorage_InputIndex.GetAmount()) throw "CCUDAMaxDePooling<type_t>::MaxDePooling: количество матриц должно быть одинаково";
  if (cCUDAMatrixStorage_Input.GetSizeX()!=cCUDAMatrixStorage_InputIndex.GetSizeX() || cCUDAMatrixStorage_Input.GetSizeY()!=cCUDAMatrixStorage_InputIndex.GetSizeY()) throw "CCUDAMaxDePooling<type_t>::MaxDePooling: размеры матриц индексов и входных данных должны быть одинаковы";
@@ -158,13 +157,19 @@ __host__ void CCUDAMaxDePooling<type_t>::MaxDePooling(size_t image_width,size_t 
  CCUDAMatrixStorage<type_t> cCUDAMatrixStorage(1,output_height*output_width,MatrixAmount*image_amount);
  cCUDAMatrixStorage.Create();
  cCUDAMatrixStorage_Output.Move(cCUDAMatrixStorage);
+
+ CCUDATimeSpent cCUDATimeSpent;
+ cCUDATimeSpent.Start();
+
  //выполняем обратное прореживание
  CUDAMaxDePoolingFunction<<<MatrixAmount*image_amount,1>>>(*this,image_width,image_height,output_width,output_height);
  HANDLE_ERROR(cudaGetLastError());
  HANDLE_ERROR(cudaDeviceSynchronize());
 
- double delta_t=GetSecondCounter()-begin_time;
- //printf("MaxDePooling: %.4f second\r\n",delta_t);
+ float gpu_time=cCUDATimeSpent.Stop();
+ char str[255];
+ sprintf(str,"MaxDePooling: %.2f millisecond\r\n",gpu_time);
+ //PutMessageToConsole(str);
 }
 
 //****************************************************************************************************

@@ -103,11 +103,11 @@ __device__ void CCUDAForwardConvolution<type_t>::ForwardConvolutionProcessing(si
  size_t step=1;
 
  type_t *image_ptr=cCUDAMatrixStorage_Image.GetItemPtr(image_index);
-  
- size_t offset_kernel_ptr=(y*output_width+x); 
+
+ size_t offset_kernel_ptr=(y*output_width+x);
  type_t *kernel_ptr=cCUDAMatrixStorage_Kernel.GetItemPtr(kernel_index);
  type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(image_index)+(kernel_index*output_width*output_height)+offset_kernel_ptr;
- type_t *bias_ptr=cCUDAMatrixStorage_Bias.GetItemPtr(kernel_index);  
+ type_t *bias_ptr=cCUDAMatrixStorage_Bias.GetItemPtr(kernel_index);
  type_t sum=*bias_ptr;//сразу прибавляем смещение
  for(size_t i=0;i<kernel_height;i++)
  {
@@ -117,7 +117,7 @@ __device__ void CCUDAForwardConvolution<type_t>::ForwardConvolutionProcessing(si
   for(size_t j=0;j<kernel_width;j++)
   {
    int32_t j0=static_cast<int32_t>(step*x+j);
-   j0-=static_cast<int32_t>(padding);    
+   j0-=static_cast<int32_t>(padding);
    if (j0<0 || j0>=image_width) continue;
    size_t offset_i_ptr=i0*image_width+j0;
    size_t offset_d_ptr=i*kernel_width+j;
