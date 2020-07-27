@@ -241,7 +241,7 @@ __host__ void CCUDAForwardConvolution<type_t>::Test(void)
  type_t *ptr_1=cMatrix_1.GetColumnPtr(0);
  type_t *ptr_2=cMatrix_2.GetColumnPtr(0);
 
- static const type_t EPS=0.0001;
+ static const type_t EPS=static_cast<type_t>(0.0001);
 
  for(size_t n=0;n<cMatrix_1.GetSizeX()*cMatrix_1.GetSizeY();n++,ptr_1++,ptr_2++)
  {

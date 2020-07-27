@@ -648,7 +648,7 @@ bool CMatrix<type_t>::Load(IDataStream *iDataStream_Ptr)
  std::swap(Item,item);
 
  //загружаем данные матрицы
- for(size_t n=0;n<Size_X*Size_Y;n++) Item[n]=iDataStream_Ptr->LoadDouble();
+ for(size_t n=0;n<Size_X*Size_Y;n++) Item[n]=static_cast<type_t>(iDataStream_Ptr->LoadDouble());
  return(true);
 }
 //----------------------------------------------------------------------------------------------------

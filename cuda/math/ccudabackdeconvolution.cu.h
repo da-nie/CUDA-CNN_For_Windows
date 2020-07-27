@@ -100,7 +100,7 @@ __device__ void CCUDABackDeConvolution<type_t>::BackDeConvolutionProcessing(size
  type_t *output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(delta_index)+kernel_depth_index*output_width*output_height+y*output_width+x;
 
  size_t padding=0;
- size_t step=1;
+// size_t step=1;
  padding=kernel_width-1-padding;
 
  size_t kernel_depth_offset=kernel_depth_index*kernel_width*kernel_height;
@@ -113,7 +113,7 @@ __device__ void CCUDABackDeConvolution<type_t>::BackDeConvolutionProcessing(size
   if (i0<0 || i0>=delta_height) continue;
   for(size_t j=0;j<kernel_width;j++)
   {
-   size_t j0=static_cast<int32_t>(x+j);
+   int32_t j0=static_cast<int32_t>(x+j);
    j0-=static_cast<int32_t>(padding);
    //игнорируем выходящие за границы элементы
    if (j0<0 || j0>=delta_width) continue;
@@ -233,7 +233,7 @@ __host__ void CCUDABackDeConvolution<type_t>::Test(void)
  type_t *ptr_1=cMatrix_1.GetColumnPtr(0);
  type_t *ptr_2=cMatrix_2.GetColumnPtr(0);
 
- static const type_t EPS=0.0001;
+ static const type_t EPS=static_cast<type_t>(0.0001);
 
  for(size_t n=0;n<cMatrix_1.GetSizeX()*cMatrix_1.GetSizeY();n++,ptr_1++,ptr_2++)
  {

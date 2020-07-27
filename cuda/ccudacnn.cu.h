@@ -50,7 +50,14 @@ class CCUDACNN
  public:
   //-перечисления---------------------------------------------------------------------------------------
   //-структуры------------------------------------------------------------------------------------------
+  struct SItem
+  {
+   size_t Index;//номер изображения
+   bool MirrorToHorizontal;//включено ли зеркальное отражение по горизонтали
+  };
   //-константы------------------------------------------------------------------------------------------
+  static const bool ENABLE_MIRROR_TO_HORIZONTAL=false;//разрешить использование отражённых по горизонтали изображений
+
   static const size_t STRING_BUFFER_SIZE=1024;//размер буфера строки
 
   static const size_t CUDA_MAX_INPUT_IMAGE_AMOUNT=55;//количество одновременно обрабатываемых CUDA изображений
@@ -105,7 +112,6 @@ class CCUDACNN
   CMatrix<type_t> LastdLayerWeigh[NN_LAYER_AMOUNT];//поправки весов полносвязной нейросети
   CMatrix<type_t> LastdLayerBias[NN_LAYER_AMOUNT];//набор поправок смещений полносвязной сети
 
-
   CCUDAMatrixStorage<type_t> CUDA_KernelA;//набор ядер первого слоя для CUDA
   CCUDAMatrixStorage<type_t> CUDA_KernelB;//набор ядер второго слоя для CUDA
 
@@ -134,8 +140,8 @@ class CCUDACNN
   void ProcessingFile(const std::string &file_name,size_t output_neuron,std::vector<std::pair<CMatrix<type_t>,CMatrix<type_t> > > &training_image);//обработка файла
   void InitKernel(CMatrix<type_t> &cMatrixKernel,CMatrix<type_t> &cMatrixKernelBias,size_t kernel_width,size_t kernel_height,size_t kernel_depth,size_t image_width,size_t image_height);//инициализация ядер
   void InitWeight(CMatrix<type_t> &cMatrix);//инициализация весов
-  bool NetProcessing(bool only_cost,double max_cost,const std::vector<size_t> &image_kit,double &cost);//выполнить один проход обучения для набора с заданными номерами образов или только посчитать ошибку
-  void ExchangeTrainingImage(std::vector<size_t> &array_index_of_image);//перемешать обучающие образы
+  bool NetProcessing(bool only_cost,double max_cost,const std::vector<SItem> &image_kit,double &cost);//выполнить один проход обучения для набора с заданными номерами образов или только посчитать ошибку
+  void ExchangeTrainingImage(std::vector<SItem> &array_index_of_image);//перемешать обучающие образы
   void SaveKernelImage(void);//сохранить изображения ядер
   bool LoadNet(const std::string &file_name);//загрузить нейросеть
   bool SaveNet(const std::string &file_name);//сохранить нейросеть
@@ -225,23 +231,15 @@ template<class type_t>
 void CCUDACNN<type_t>::LoadImage(void)
 {
  InputImage.clear();
- char string[STRING_BUFFER_SIZE];
-
+ char str[STRING_BUFFER_SIZE];
  std::string path=GetCurrentPath();
-
- FindFile(std::string(path)+GetPathDivider()+"0",0,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"1",1,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"2",2,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"3",3,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"4",4,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"5",5,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"6",6,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"7",7,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"8",8,InputImage);
- FindFile(std::string(path)+GetPathDivider()+"9",9,InputImage);
-
- sprintf(string,"Найдено образов для обучения:%ld\r\n",InputImage.size());
- PutMessageToConsole(string);
+ for(size_t n=0;n<OUTPUT_LAYER_SIZE;n++)
+ {
+  sprintf(str,"%i",n);
+  FindFile(std::string(path)+GetPathDivider()+str,n,InputImage);
+ }
+ sprintf(str,"Найдено образов для обучения:%ld\r\n",InputImage.size());
+ PutMessageToConsole(str);
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -261,9 +259,9 @@ void CCUDACNN<type_t>::FindFile(const std::string &path,size_t output_neuron,std
   size_t length=file_name.length();
   if (length<4) continue;
   if (file_name[length-4]!='.') continue;
-  if (file_name[length-3]!='t' && file_name[length-3]!='T') continue;
+  if (file_name[length-3]!='t' && file_name[length-3]!='T')  continue;
   if (file_name[length-2]!='g' && file_name[length-2]!='G') continue;
-  if (file_name[length-1]!='a' && file_name[length-1]!='A') continue;
+  if ((file_name[length-1]!='a' && file_name[length-1]!='A') && (file_name[length-1]!='i' && file_name[length-1]!='I')) continue;//для переименованных в tgi файлов
   //отправляем файл на обработку
   ProcessingFile(path+GetPathDivider()+file_name,output_neuron,training_image);
  }
@@ -324,8 +322,8 @@ template<class type_t>
 void CCUDACNN<type_t>::InitWeight(CMatrix<type_t> &cMatrix)
 {
  //инициализируем веса и сдвиги
- type_t size=cMatrix.GetSizeX();
- type_t koeff=sqrt(2.0/size);
+ type_t size=static_cast<type_t>(cMatrix.GetSizeX());
+ type_t koeff=static_cast<type_t>(sqrt(2.0/size));
 
  size_t width=cMatrix.GetSizeX();
  size_t height=cMatrix.GetSizeY();
@@ -347,7 +345,7 @@ void CCUDACNN<type_t>::InitWeight(CMatrix<type_t> &cMatrix)
 //выполнить один проход обучения для набора с заданными номерами образов или только посчитать ошибку
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::vector<size_t> &image_kit,double &cost)
+bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::vector<SItem> &image_kit,double &cost)
 {
  cost=0;
  size_t part_size=image_kit.size();
@@ -376,8 +374,29 @@ bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::v
  //копируем входные данные набора
  for(size_t n=0;n<part_size;n++)
  {
-  size_t image_index=image_kit[n];
-  CUDA_InputImage.Set(n,InputImage[image_index].first.GetColumnPtr(0));
+  size_t image_index=image_kit[n].Index;
+  if (image_kit[n].MirrorToHorizontal==false) CUDA_InputImage.Set(n,InputImage[image_index].first.GetColumnPtr(0));//режим зеркального отраженния отключён
+  else
+  {
+   CMatrix<type_t> &cMatrix_Original=InputImage[image_index].first;
+   size_t w=cMatrix_Original.GetSizeX();
+   size_t h=cMatrix_Original.GetSizeY();
+   CMatrix<type_t> cMatrix_Mirror(h,w);
+
+   for(size_t y=0;y<h;y++)
+   {
+    type_t *original_ptr=cMatrix_Original.GetColumnPtr(y);
+    type_t *mirror_ptr=cMatrix_Mirror.GetColumnPtr(y);
+    //переворачиваем изображение
+    for(size_t iy=0;iy<IMAGE_HEIGHT;iy++)
+    {
+     type_t *org_ptr=original_ptr+iy*IMAGE_WIDTH+IMAGE_WIDTH-1;
+     type_t *mrr_ptr=mirror_ptr+iy*IMAGE_WIDTH;
+     for(size_t ix=0;ix<IMAGE_WIDTH;ix++,org_ptr--,mrr_ptr++) *mrr_ptr=*org_ptr;
+    }
+   }
+   CUDA_InputImage.Set(n,cMatrix_Mirror.GetColumnPtr(0));//режим зеркального отраженния включён
+  }
  }
 
  //--------------------------------------------------
@@ -552,7 +571,7 @@ bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::v
  cCUDAMatrixStorage_Etalon.Create();
  for(size_t n=0;n<part_size;n++)
  {
-  size_t image_index=image_kit[n];
+  size_t image_index=image_kit[n].Index;
   cCUDAMatrixStorage_Etalon.Set(n,InputImage[image_index].second.GetColumnPtr(0));
  }
 
@@ -586,6 +605,11 @@ bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::v
    }
   }
   if (local_cost>cost) cost=local_cost;
+  if (local_cost<max_cost)
+  {
+   cMatrix_Error.Zero();
+   cCUDAMatrixStorage_Error.Set(n,cMatrix_Error.GetColumnPtr(0));
+  }
  }
  if (only_cost==true) return(true);//обучение сети не требуется
  if (cost<max_cost) return(true);//обучение сети не требуется
@@ -941,7 +965,7 @@ bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::v
 //перемешать обучающие образы
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
-void CCUDACNN<type_t>::ExchangeTrainingImage(std::vector<size_t> &array_index_of_image)
+void CCUDACNN<type_t>::ExchangeTrainingImage(std::vector<SItem> &array_index_of_image)
 {
  size_t training_amount=array_index_of_image.size();
  for(size_t n=0;n<training_amount;n++)
@@ -950,7 +974,7 @@ void CCUDACNN<type_t>::ExchangeTrainingImage(std::vector<size_t> &array_index_of
   size_t index_2=static_cast<size_t>((rand()*static_cast<double>(training_amount*10))/static_cast<double>(RAND_MAX));
   index_2%=training_amount;
 
-  size_t tmp=array_index_of_image[index_1];
+  SItem tmp=array_index_of_image[index_1];
   array_index_of_image[index_1]=array_index_of_image[index_2];
   array_index_of_image[index_2]=tmp;
  }
@@ -1186,11 +1210,12 @@ void CCUDACNN<type_t>::ResetDeltaWeighAndBias(void)
 template<class type_t>
 void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
 {
-/*
+ static const type_t MIN_KERNEL_DELTA=static_cast<type_t>(1e-9);//минимальная поправка для ядер
+ /*
  for(size_t n=0;n<NN_LAYER_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dLayerWeigh[n],dLayerWeigh[n],speed);
-  CMatrix<type_t>::Mul(dLayerBias[n],dLayerBias[n],speed);
+  CMatrix<type_t>::Mul(dLayerWeigh[n],dLayerWeigh[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dLayerBias[n],dLayerBias[n],static_cast<type_t>(speed));
   CMatrix<type_t>::Sub(LayerWeigh[n],LayerWeigh[n],dLayerWeigh[n]);
   CMatrix<type_t>::Sub(LayerBias[n],LayerBias[n],dLayerBias[n]);
  }
@@ -1198,8 +1223,8 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
  bool error=true;
  for(size_t n=0;n<KERNEL_A_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dKernelA[n],dKernelA[n],speed);
-  CMatrix<type_t>::Mul(dKernelBiasA[n],dKernelBiasA[n],speed);
+  CMatrix<type_t>::Mul(dKernelA[n],dKernelA[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dKernelBiasA[n],dKernelBiasA[n],static_cast<type_t>(speed));
 
   CMatrix<type_t>::Sub(KernelA[n],KernelA[n],dKernelA[n]);
   CMatrix<type_t>::Sub(KernelBiasA[n],KernelBiasA[n],dKernelBiasA[n]);
@@ -1209,14 +1234,14 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
    for(size_t x=0;x<dKernelA[n].GetSizeX();x++)
    {
     type_t v=dKernelA[n].GetElement(y,x);
-    if (fabs(v)>1e-9) error=false;
+    if (static_cast<type_t>(fabs(v))>MIN_KERNEL_DELTA) error=false;
    }
   }
  }
  for(size_t n=0;n<KERNEL_B_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dKernelB[n],dKernelB[n],speed);
-  CMatrix<type_t>::Mul(dKernelBiasB[n],dKernelBiasB[n],speed);
+  CMatrix<type_t>::Mul(dKernelB[n],dKernelB[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dKernelBiasB[n],dKernelBiasB[n],static_cast<type_t>(speed));
 
   CMatrix<type_t>::Sub(KernelB[n],KernelB[n],dKernelB[n]);
   CMatrix<type_t>::Sub(KernelBiasB[n],KernelBiasB[n],dKernelBiasB[n]);
@@ -1226,19 +1251,18 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
    for(size_t x=0;x<dKernelB[n].GetSizeX();x++)
    {
     type_t v=dKernelB[n].GetElement(y,x);
-	if (fabs(v)>1e-9) error=false;
+	if (static_cast<type_t>(fabs(v))>MIN_KERNEL_DELTA) error=false;
    }
   }
  }
  if (error==true) PutMessageToConsole("ЯДРА НЕ ОБУЧАЮТСЯ! ПОПРАВКИ БЛИЗКИ К НУЛЮ!\r\n");
-*/
-
+ */
 
  type_t gamma=0;
  for(size_t n=0;n<NN_LAYER_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dLayerWeigh[n],dLayerWeigh[n],speed);
-  CMatrix<type_t>::Mul(dLayerBias[n],dLayerBias[n],speed);
+  CMatrix<type_t>::Mul(dLayerWeigh[n],dLayerWeigh[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dLayerBias[n],dLayerBias[n],static_cast<type_t>(speed));
 
   CMatrix<type_t>::Mul(LastdLayerWeigh[n],LastdLayerWeigh[n],gamma);
   CMatrix<type_t>::Mul(LastdLayerBias[n],LastdLayerBias[n],gamma);
@@ -1252,8 +1276,8 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
  bool error=true;
  for(size_t n=0;n<KERNEL_A_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dKernelA[n],dKernelA[n],speed);
-  CMatrix<type_t>::Mul(dKernelBiasA[n],dKernelBiasA[n],speed);
+  CMatrix<type_t>::Mul(dKernelA[n],dKernelA[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dKernelBiasA[n],dKernelBiasA[n],static_cast<type_t>(speed));
 
 
   CMatrix<type_t>::Mul(LastdKernelA[n],LastdKernelA[n],gamma);
@@ -1270,14 +1294,14 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
    for(size_t x=0;x<dKernelA[n].GetSizeX();x++)
    {
     type_t v=dKernelA[n].GetElement(y,x);
-    if (fabs(v)>1e-9) error=false;
+    if (static_cast<type_t>(fabs(v))>MIN_KERNEL_DELTA) error=false;
    }
   }
  }
  for(size_t n=0;n<KERNEL_B_AMOUNT;n++)
  {
-  CMatrix<type_t>::Mul(dKernelB[n],dKernelB[n],speed);
-  CMatrix<type_t>::Mul(dKernelBiasB[n],dKernelBiasB[n],speed);
+  CMatrix<type_t>::Mul(dKernelB[n],dKernelB[n],static_cast<type_t>(speed));
+  CMatrix<type_t>::Mul(dKernelBiasB[n],dKernelBiasB[n],static_cast<type_t>(speed));
 
 
   CMatrix<type_t>::Mul(LastdKernelB[n],LastdKernelB[n],gamma);
@@ -1294,12 +1318,11 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
    for(size_t x=0;x<dKernelB[n].GetSizeX();x++)
    {
     type_t v=dKernelB[n].GetElement(y,x);
-	if (fabs(v)>1e-9) error=false;
+	if (static_cast<type_t>(fabs(v))>MIN_KERNEL_DELTA) error=false;
    }
   }
  }
- if (error==true) PutMessageToConsole("ЯДРА НЕ ОБУЧАЮТСЯ! ПОПРАВКИ БЛИЗКИ К НУЛЮ!\r\n");
-
+ if (error==true) PutMessageToConsole("ЯДРА НЕ ОБУЧАЮТСЯ! ПОПРАВКИ БЛИЗКИ К НУЛЮ!\r\n"); 
 }
 
 //----------------------------------------------------------------------------------------------------
@@ -1315,27 +1338,41 @@ void CCUDACNN<type_t>::TrainingNet(void)
  static const double max_cost=0.1;//максимальная ошибка
  static const double speed=0.25;//скорость обучения
 
- std::vector<size_t> array_index_of_image(image_amount);//индексы обучающих образов
- for(size_t n=0;n<image_amount;n++) array_index_of_image[n]=n;
+ size_t new_image_amount=image_amount;
+ if (ENABLE_MIRROR_TO_HORIZONTAL==true) new_image_amount*=2;
+
+ std::vector<SItem> array_index_of_image(new_image_amount);//индексы обучающих образов
+ for(size_t n=0;n<image_amount;n++)
+ {
+  array_index_of_image[n].Index=n;
+  array_index_of_image[n].MirrorToHorizontal=false;
+
+  if (ENABLE_MIRROR_TO_HORIZONTAL==true)
+  {
+   array_index_of_image[n+image_amount].Index=n;  
+   array_index_of_image[n+image_amount].MirrorToHorizontal=true;
+  }
+ }
+ image_amount=new_image_amount;
 
  size_t iteration=0;
  while(1)
  {
+  double current_max_cost=0;
+  bool training_done=true;
+  double begin_time=GetSecondCounter();
+  size_t part_index=0;
   //выполняем обучение наборов
   ExchangeTrainingImage(array_index_of_image);//перемешиваем индексы обучающих образов
 
   size_t image_index=0;
   size_t image_counter=image_amount;
-  double current_max_cost=0;
-  bool training_done=true;
-  double begin_time=GetSecondCounter();
-  size_t part_index=0;
 
   while(image_index<image_amount)
   {
    size_t part_size=CUDA_MAX_INPUT_IMAGE_AMOUNT;
    if (image_counter<part_size) part_size=image_counter;
-   std::vector<size_t> image_kit(part_size);
+   std::vector<SItem> image_kit(part_size);
    for(size_t n=0;n<part_size;n++) image_kit[n]=array_index_of_image[image_index+n];
 
    //очищаем добавки к весам и смещениям

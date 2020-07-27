@@ -118,8 +118,8 @@ __device__ void CCUDABackConvolution<type_t>::ZeroProcessing(size_t image_index,
  type_t *output_ptr=cCUDAMatrixStorage_MiddleOutput.GetItemPtr(output_index)+image_index*output_width*output_height*delta_width;
  type_t *output_bias_ptr=cCUDAMatrixStorage_MiddleOutputBias.GetItemPtr(output_index)+image_index*delta_width;
 
- size_t padding=0;
- size_t step=1;
+// size_t padding=0;
+// size_t step=1;
  //обнуляем суммы
  for(size_t d=0;d<image_depth;d++)
  {
@@ -162,7 +162,7 @@ __device__ void CCUDABackConvolution<type_t>::BackConvolutionProcessing(size_t i
  type_t *output_bias_ptr=cCUDAMatrixStorage_MiddleOutputBias.GetItemPtr(output_index)+image_index*delta_width+x;
 
  size_t padding=0;
- size_t step=1;
+// size_t step=1;
 
  size_t i=output_pos/output_width;
  size_t j=output_pos%output_height;
@@ -386,7 +386,7 @@ __host__ void CCUDABackConvolution<type_t>::Test(void)
  type_t *ptr_2=cMatrix_2.GetColumnPtr(0);
 
  //проверяем значения свёрток
- static const type_t EPS=0.0001;
+ static const type_t EPS=static_cast<type_t>(0.0001);
 
  for(size_t n=0;n<cMatrix_1.GetSizeX()*cMatrix_1.GetSizeY();n++,ptr_1++,ptr_2++)
  {

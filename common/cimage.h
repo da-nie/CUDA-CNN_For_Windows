@@ -143,7 +143,7 @@ bool CImage<type_t>::Load(CMatrix<type_t> &cMatrix_Image,const std::string &file
 template<class type_t>
 bool CImage<type_t>::Normalize(CMatrix<type_t> &cMatrix_Image)
 {
- static const type_t EPS=0.00001;
+ static const type_t EPS=static_cast<type_t>(0.00001);
 
  size_t size=cMatrix_Image.GetSizeX()*cMatrix_Image.GetSizeY();
  //type_t size_channel=cMatrix_Image.GetSizeX();
