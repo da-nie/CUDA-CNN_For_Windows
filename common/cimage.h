@@ -144,9 +144,39 @@ template<class type_t>
 bool CImage<type_t>::Normalize(CMatrix<type_t> &cMatrix_Image)
 {
  static const type_t EPS=static_cast<type_t>(0.00001);
-
  size_t size=cMatrix_Image.GetSizeX()*cMatrix_Image.GetSizeY();
- //type_t size_channel=cMatrix_Image.GetSizeX();
+
+ //математическое ожидание
+ type_t mb=0;
+ type_t *m_ptr=cMatrix_Image.GetColumnPtr(0);
+ for(size_t n=0;n<size;n++,m_ptr++)
+ {
+  type_t v=*m_ptr;
+  mb+=v;
+ }
+ mb/=static_cast<type_t>(size);
+ //дисперсия
+ type_t gb2=0;
+ m_ptr=cMatrix_Image.GetColumnPtr(0);
+ for(size_t n=0;n<size;n++,m_ptr++)
+ {
+  type_t v=*m_ptr;
+  v-=mb;
+  v*=v;
+  gb2+=v;
+ }
+ gb2/=static_cast<type_t>(size);
+ //нормализация
+ m_ptr=cMatrix_Image.GetColumnPtr(0);
+ type_t z=static_cast<type_t>(sqrt(gb2+EPS));
+ for(size_t n=0;n<size;n++,m_ptr++)
+ {
+  type_t v=*m_ptr;
+  v-=mb;
+  v/=z;
+  *m_ptr=v;
+ }
+ /*
  type_t min=1;
  type_t max=0;
  type_t *m_ptr=cMatrix_Image.GetColumnPtr(0);
@@ -168,6 +198,7 @@ bool CImage<type_t>::Normalize(CMatrix<type_t> &cMatrix_Image)
   //v/=size_channel;
   *m_ptr=v;
  }
+ */
  return(true);
 }
 //----------------------------------------------------------------------------------------------------
