@@ -108,6 +108,8 @@ class CMatrix
   static void Mul(CVector<type_t> &cVector_Output,const CVector<type_t> &cVector_Left,const CMatrix<type_t> &cMatrix_Right);//умножить вектор на матрицу
   static void Mul(CMatrix<type_t> &cMatrix_Output,const CVector<type_t> &cVector_Left,const CVector<type_t> &cVector_Right);//умножить вектора и получить матрицу
   static void Transponse(CMatrix<type_t> &cMatrix_Output,const CMatrix<type_t> &cMatrix_Input);//транспонировать матрицу
+  static void MatrixColumnScalarProduction(CMatrix<type_t> &cMatrix_Output,CMatrix<type_t> &cMatrix_Left,CMatrix<type_t> &cMatrix_Right);//построчное скалярное произведение матрицы на матрицу
+  static void MatrixItemProduction(CMatrix<type_t> &cMatrix_Output,CMatrix<type_t> &cMatrix_Left,CMatrix<type_t> &cMatrix_Right);//поэлементное произведение матрицы на матрицу
 
   bool Save(IDataStream *iDataStream_Ptr);//сохранить матрицу
   bool Load(IDataStream *iDataStream_Ptr);//загрузить матрицу
@@ -512,6 +514,62 @@ CMatrix<type_t> CMatrix<type_t>::Transpose(void)
  return(cMatrix);
 }
 //----------------------------------------------------------------------------------------------------
+//построчное скалярное произведение матрицы на матрицу
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+void CMatrix<type_t>::MatrixColumnScalarProduction(CMatrix<type_t> &cMatrix_Output,CMatrix<type_t> &cMatrix_Left,CMatrix<type_t> &cMatrix_Right)
+{ 
+ if (cMatrix_Right.GetSizeX()!=cMatrix_Left.GetSizeX()) throw("Ошибка построчного умножения матрицы на матрицу для вычисления скалярного произведения");
+ if (cMatrix_Right.GetSizeY()!=cMatrix_Left.GetSizeY()) throw("Ошибка построчного умножения матрицы на матрицу для вычисления скалярного произведения");
+
+ type_t *right_ptr=cMatrix_Right.GetColumnPtr(0);
+ type_t *output_ptr=cMatrix_Output.GetColumnPtr(0);
+ type_t *left_ptr=cMatrix_Left.GetColumnPtr(0);
+
+ size_t size_y=cMatrix_Left.GetSizeY();
+ size_t size_x=cMatrix_Left.GetSizeX();
+ for(size_t y=0;y<size_y;y++,output_ptr++)
+ {
+  type_t sc=0;
+  for(size_t x=0;x<size_x;x++,left_ptr++,right_ptr++)
+  {
+   type_t a=*left_ptr;
+   type_t b=*right_ptr;
+   sc+=a*b;
+  }
+  *output_ptr=sc;
+ } 
+}
+//----------------------------------------------------------------------------------------------------
+//поэлементное произведение матрицы на матрицу
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+void CMatrix<type_t>::MatrixItemProduction(CMatrix<type_t> &cMatrix_Output,CMatrix<type_t> &cMatrix_Left,CMatrix<type_t> &cMatrix_Right)
+{
+ if (cMatrix_Right.GetSizeX()!=cMatrix_Left.GetSizeX()) throw("Ошибка поэлементного умножения матрицы на матрицу");
+ if (cMatrix_Right.GetSizeY()!=cMatrix_Left.GetSizeY()) throw("Ошибка поэлементного умножения матрицы на матрицу");
+ if (cMatrix_Right.GetSizeX()!=cMatrix_Output.GetSizeX()) throw("Ошибка поэлементного умножения матрицы на матрицу");
+ if (cMatrix_Right.GetSizeY()!=cMatrix_Output.GetSizeY()) throw("Ошибка поэлементного умножения матрицы на матрицу");
+
+ type_t *right_ptr=cMatrix_Right.GetColumnPtr(0);
+ type_t *output_ptr=cMatrix_Output.GetColumnPtr(0);
+ type_t *left_ptr=cMatrix_Left.GetColumnPtr(0);
+
+ size_t size_y=cMatrix_Left.GetSizeY();
+ size_t size_x=cMatrix_Left.GetSizeX();
+ for(size_t y=0;y<size_y;y++)
+ {
+  for(size_t x=0;x<size_x;x++,left_ptr++,right_ptr++,output_ptr++)
+  {
+   type_t a=*left_ptr;
+   type_t b=*right_ptr;
+  *output_ptr=a*b;
+  }  
+ }
+}
+
+
+//----------------------------------------------------------------------------------------------------
 //переместить матрицу
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
@@ -738,6 +796,20 @@ bool CMatrix<type_t>::Test(void)
  if (cMatrixC.GetElement(0,1)!=3) return(false);
  if (cMatrixC.GetElement(1,0)!=2) return(false);
  if (cMatrixC.GetElement(1,1)!=4) return(false);
+
+ //построчное скалярное произведение матриц
+ CMatrix<type_t> cMatrixD(2,1);
+ MatrixColumnScalarProduction(cMatrixD,cMatrixA,cMatrixB);
+ if (cMatrixD.GetElement(0,0)!=5) return(false);
+ if (cMatrixD.GetElement(1,0)!=25) return(false);
+
+ //поэлементное умножение матриц
+ CMatrix<type_t> cMatrixE(2,2);
+ MatrixItemProduction(cMatrixE,cMatrixA,cMatrixB);
+ if (cMatrixE.GetElement(0,0)!=1) return(false);
+ if (cMatrixE.GetElement(0,1)!=4) return(false);
+ if (cMatrixE.GetElement(1,0)!=9) return(false);
+ if (cMatrixE.GetElement(1,1)!=16) return(false);
 
  return(true);
 }
