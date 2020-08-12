@@ -62,24 +62,29 @@ class CCUDAFunction
   __host__ void ApplyLeakyReLU(void);//применить функцию Leaky ReLU
   __host__ void ApplyLinear(void);//применить линейную функцию
   __host__ void ApplyTangence(void);//применить функцию гиперболический тангенс
+  __host__ void ApplySoftMax(void);//применить функцию softmax
 
   __host__ void ApplyDifferentialSigmoid(void);//применить функцию производной от сигмоида
   __host__ void ApplyDifferentialReLU(void);//применить функцию производной от ReLU
   __host__ void ApplyDifferentialLeakyReLU(void);//применить функцию производной от Leaky ReLU
   __host__ void ApplyDifferentialLinear(void);//применить производную линейной функций
   __host__ void ApplyDifferentialTangence(void);//применить функцию производной от гиперболического тангенса
+  __host__ void ApplyDifferentialSoftMax(void);//применить функцию производной от softmax
 
   __device__ void ApplySigmoidProcessing(size_t index,size_t y);//процесс применения функции сигмоид
   __device__ void ApplyReLUProcessing(size_t index,size_t y);//процесс применения функции ReLU
   __device__ void ApplyLeakyReLUProcessing(size_t index,size_t y);//процесс применения функции Leaky ReLU
   __device__ void ApplyLinearProcessing(size_t index,size_t y);//процесс применения линейной функции
   __device__ void ApplyTangenceProcessing(size_t index,size_t y);//процесс применения функции гиперболический тангенс
+  __device__ void ApplySoftMaxProcessing(size_t index,size_t y);//процесс применения функции softmax
 
   __device__ void ApplyDifferentialSigmoidProcessing(size_t index,size_t y);//процесс применения производной функции сигмоид
   __device__ void ApplyDifferentialReLUProcessing(size_t index,size_t y);//процесс применения производной функции ReLU
   __device__ void ApplyDifferentialLeakyReLUProcessing(size_t index,size_t y);//процесс применения производной функции Leaky ReLU
   __device__ void ApplyDifferentialLinearProcessing(size_t index,size_t y);//процесс применения производной линейной функции
   __device__ void ApplyDifferentialTangenceProcessing(size_t index,size_t y);//процесс применения производной функции гиперболический тангенс
+  __device__ void ApplyDifferentialSoftMaxProcessing(size_t index,size_t y);//процесс применения производной функции softmax
+
  private:
   //-закрытые функции-----------------------------------------------------------------------------------
   __host__ __device__ type_t Sigmoid(type_t v);//сигмоид
@@ -210,14 +215,6 @@ __host__ __device__ type_t CCUDAFunction<type_t>::dTangence(type_t v)
  type_t t=Tangence(v);
  return(1-t*t);
 }
-
-
-
-
-
-
-
-
 
 
 //----------------------------------------------------------------------------------------------------
@@ -452,6 +449,57 @@ __host__ void CCUDAFunction<type_t>::ApplyTangence(void)
 
 
 //----------------------------------------------------------------------------------------------------
+//функция CUDA для применения функции softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDASoftMaxFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplySoftMaxProcessing(index,y);
+}
+
+//----------------------------------------------------------------------------------------------------
+//процесс применения функции softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__device__ void CCUDAFunction<type_t>::ApplySoftMaxProcessing(size_t index,size_t y)
+{
+ size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
+ size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
+
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+
+ type_t *m_input_y_ptr=m_input_ptr+y*input_x;
+ double summ=0;
+ for(size_t y=0;y<input_y;y++)
+ {
+  for(size_t x=0;x<input_x;x++,m_input_ptr++)
+  {
+   type_t value=*m_input_ptr;
+   summ+=exp(value);
+  }
+ }
+ double value=exp(*m_input_y_ptr)/summ;
+ for(size_t x=0;x<input_x;x++,m_output_ptr++) *m_output_ptr=static_cast<type_t>(value);
+}
+//----------------------------------------------------------------------------------------------------
+//применить функцию softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplySoftMax(void)
+{
+ Init();
+ CUDASoftMaxFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
+
+
+
+
+//----------------------------------------------------------------------------------------------------
 //функция CUDA для применения производной функции сигмоид
 //----------------------------------------------------------------------------------------------------
 template<class type_t>
@@ -683,6 +731,57 @@ __host__ void CCUDAFunction<type_t>::ApplyDifferentialTangence(void)
  HANDLE_ERROR(cudaDeviceSynchronize());
 }
 
+
+
+//----------------------------------------------------------------------------------------------------
+//функция CUDA для применения производной функции softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__global__ void CUDADifferentialSoftMaxFunction(CCUDAFunction<type_t> cCUDAFunction)
+{
+ size_t index=blockIdx.x;
+ size_t y=threadIdx.x;
+ cCUDAFunction.ApplyDifferentialSoftMaxProcessing(index,y);
+}
+
+//----------------------------------------------------------------------------------------------------
+//процесс применения производной функции softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__device__ void CCUDAFunction<type_t>::ApplyDifferentialSoftMaxProcessing(size_t index,size_t y)
+{
+ size_t input_x=cCUDAMatrixStorage_Input.GetSizeX();
+ size_t input_y=cCUDAMatrixStorage_Input.GetSizeY();
+
+ type_t *m_output_ptr=cCUDAMatrixStorage_Output.GetItemPtr(index)+y*input_x;
+ type_t *m_input_ptr=cCUDAMatrixStorage_Input.GetItemPtr(index);
+
+ type_t *m_input_y_ptr=m_input_ptr+y*input_x;
+ double summ=0;
+ for(size_t y=0;y<input_y;y++)
+ {
+  for(size_t x=0;x<input_x;x++,m_input_ptr++)
+  {
+   type_t value=*m_input_ptr;
+   summ+=exp(value);
+  }
+ }
+ double value=exp(*m_input_y_ptr)/summ;
+ value=value*(1-value);
+ for(size_t x=0;x<input_x;x++,m_output_ptr++) *m_output_ptr=static_cast<type_t>(value);
+}
+
+//----------------------------------------------------------------------------------------------------
+//применить функцию производной от softmax
+//----------------------------------------------------------------------------------------------------
+template<class type_t>
+__host__ void CCUDAFunction<type_t>::ApplyDifferentialSoftMax(void)
+{
+ Init();
+ CUDADifferentialSoftMaxFunction<<<MatrixAmount,cCUDAMatrixStorage_Input.GetSizeY()>>>(*this);
+ HANDLE_ERROR(cudaGetLastError());
+ HANDLE_ERROR(cudaDeviceSynchronize());
+}
 
 //----------------------------------------------------------------------------------------------------
 //инициализация
