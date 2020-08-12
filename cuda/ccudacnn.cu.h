@@ -113,6 +113,9 @@ class CCUDACNN
   CMatrix<type_t> LastdLayerWeigh[NN_LAYER_AMOUNT];//поправки весов полносвязной нейросети
   CMatrix<type_t> LastdLayerBias[NN_LAYER_AMOUNT];//набор поправок смещений полносвязной сети
 
+  CMatrix<type_t> cMatrix_DropOutBias[NN_LAYER_AMOUNT];//матрица dropout для сдвигов
+  CMatrix<type_t> cMatrix_DropOutWeigh[NN_LAYER_AMOUNT];//матрица dropout для весов
+
   CCUDAMatrixStorage<type_t> CUDA_KernelA;//набор ядер первого слоя для CUDA
   CCUDAMatrixStorage<type_t> CUDA_KernelB;//набор ядер второго слоя для CUDA
 
@@ -575,8 +578,6 @@ bool CCUDACNN<type_t>::NetProcessing(bool only_cost,double max_cost,const std::v
  cCUDAMatrixStorage_LayerOutputH[0].Reinterpret(forward_pooling_b_size_x*forward_pooling_b_size_y*(forward_pooling_b_amount/part_size),1,part_size);
 
  //создадим матрицы dropout'а
- CMatrix<type_t> cMatrix_DropOutBias[NN_LAYER_AMOUNT];
- CMatrix<type_t> cMatrix_DropOutWeigh[NN_LAYER_AMOUNT];
  CCUDAMatrixStorage<type_t> cCUDAMatrixStorage_DropOutH[NN_LAYER_AMOUNT];
  for(size_t n=0;n<NN_LAYER_AMOUNT;n++)
  {
@@ -1326,8 +1327,15 @@ void CCUDACNN<type_t>::UpdateWeighAndBias(double speed)
   CMatrix<type_t>::Sub(LastdLayerWeigh[n],LastdLayerWeigh[n],cMatrix_DestroyWeigh);
   CMatrix<type_t>::Sub(LastdLayerBias[n],LastdLayerBias[n],cMatrix_DestroyBias);
 
-  CMatrix<type_t>::Add(LayerWeigh[n],LayerWeigh[n],LastdLayerWeigh[n]);
-  CMatrix<type_t>::Add(LayerBias[n],LayerBias[n],LastdLayerBias[n]);
+  //применяем dropout
+  CMatrix<type_t> cMatrix_dLayerBias=LastdLayerBias[n];
+  CMatrix<type_t> cMatrix_dLayerWeigh=LastdLayerWeigh[n];
+  CMatrix<type_t>::MatrixItemProduction(cMatrix_dLayerBias,cMatrix_dLayerBias,cMatrix_DropOutBias[n]);
+  CMatrix<type_t>::MatrixItemProduction(cMatrix_dLayerWeigh,cMatrix_dLayerWeigh,cMatrix_DropOutWeigh[n]);
+
+  //обновляем веса
+  CMatrix<type_t>::Add(LayerWeigh[n],LayerWeigh[n],cMatrix_dLayerWeigh);
+  CMatrix<type_t>::Add(LayerBias[n],LayerBias[n],cMatrix_dLayerBias);
  }
  bool error=true;
  for(size_t n=0;n<KERNEL_A_AMOUNT;n++)
