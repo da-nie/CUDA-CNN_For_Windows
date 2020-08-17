@@ -150,7 +150,7 @@ __host__ void CCUDASharedPtr<type_t>::Create(size_t unit_amount)
  if (MaxMemory<Memory)
  {
   MaxMemory=Memory;
-  printf("Максимальный расход памяти обновлён:%i\r\n",MaxMemory);
+  printf("Максимальный расход памяти обновлён:%lu\r\n",MaxMemory);
  }
  /*
  FILE *file=fopen("memory.txt","ab");

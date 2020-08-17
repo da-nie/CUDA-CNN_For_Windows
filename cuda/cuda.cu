@@ -22,14 +22,14 @@ void CUDA_Start(void)
  {
   HANDLE_ERROR(cudaGetDeviceProperties(&devProp,device));
   printf("Device %d\n", device );
-  printf("Compute capability     : %d.%d\n",devProp.major,devProp.minor);
+  printf("Compute capability     : %lu.%lu\n",devProp.major,devProp.minor);
   printf("Name                   : %s\n",devProp.name);
-  printf("Total Global Memory    : %d\n",devProp.totalGlobalMem);
-  printf("Shared memory per block: %d\n",devProp.sharedMemPerBlock);
-  printf("Registers per block    : %d\n",devProp.regsPerBlock);
-  printf("Warp size              : %d\n",devProp.warpSize);
-  printf("Max threads per block  : %d\n",devProp.maxThreadsPerBlock);
-  printf("Total constant memory  : %d\n",devProp.totalConstMem);
+  printf("Total Global Memory    : %lu\n",devProp.totalGlobalMem);
+  printf("Shared memory per block: %lu\n",devProp.sharedMemPerBlock);
+  printf("Registers per block    : %lu\n",devProp.regsPerBlock);
+  printf("Warp size              : %lu\n",devProp.warpSize);
+  printf("Max threads per block  : %lu\n",devProp.maxThreadsPerBlock);
+  printf("Total constant memory  : %lu\n",devProp.totalConstMem);
  }
  HANDLE_ERROR(cudaSetDevice(0));
  HANDLE_ERROR(cudaDeviceReset());
