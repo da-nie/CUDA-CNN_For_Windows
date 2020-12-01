@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <windows.h>
+#include <stdint.h>
 
 //****************************************************************************************************
 //реализация функций
@@ -132,4 +133,57 @@ void PutMessageToConsole(const std::string &message)
  if (file==NULL) return;
  fprintf(file,"%s",message.c_str());
  fclose(file);
+}
+//----------------------------------------------------------------------------------------------------
+//скопировать файл
+//----------------------------------------------------------------------------------------------------
+void CopyFileTo(const std::string &source_file,const std::string &target_file)
+{
+ FILE *file_one=fopen(source_file.c_str(),"rb");
+ if (file_one==NULL) return;
+ FILE *file_two=fopen(target_file.c_str(),"wb");
+ if (file_two==NULL)
+ {
+  fclose(file_one);
+  return;
+ }
+ printf("Copy file:%s -> %s\r\n",source_file.c_str(),target_file.c_str());
+
+ uint8_t buffer[65536];
+ while(1)
+ {
+  size_t size=fread(buffer,sizeof(uint8_t),65535,file_one);
+  if (size==0) break;
+  fwrite(buffer,sizeof(uint8_t),size,file_two);
+ }
+ fclose(file_one);
+ fclose(file_two);
+}
+
+//----------------------------------------------------------------------------------------------------
+//перенести файл
+//----------------------------------------------------------------------------------------------------
+void MoveFileTo(const std::string &source_file,const std::string &target_file)
+{
+ FILE *file_one=fopen(source_file.c_str(),"rb");
+ if (file_one==NULL) return;
+ FILE *file_two=fopen(target_file.c_str(),"wb");
+ if (file_two==NULL)
+ {
+  fclose(file_one);
+  return;
+ }
+ printf("Copy file:%s -> %s\r\n",source_file.c_str(),target_file.c_str());
+
+ uint8_t buffer[65536];
+ while(1)
+ {
+  size_t size=fread(buffer,sizeof(uint8_t),65535,file_one);
+  if (size==0) break;
+  fwrite(buffer,sizeof(uint8_t),size,file_two);
+ }
+ fclose(file_one);
+ fclose(file_two);
+ //удаляем файл
+ DeleteFile(source_file.c_str());
 }
